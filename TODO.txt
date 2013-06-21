@@ -1,0 +1,104 @@
+DONE : 
+* time management
+* threads can wait time in parallel
+* can simulate simultaneity
+* added random test
+* event waiting/emitting
+* event callbacks
+* nested components
+* starting a thread from another thread
+* run a thread inside another thread and wait for it to finish
+* killing another thread
+
+-------------------------------------------------------------------------------------------
+VERIFIED:
+* get pointer to self thread
+* update component simulation
+
+IMPLEMENTED:
+* get list of pointers to children threads
+* nb assignments
+* kill all children threads
+** save history in a list
+* rise , fall, change events
+* temporal expressions
+
+TODO:
+* fork join, join_none, join_any
+* access control : mutexes, semaphores
+** dump history to vcd file
+* write paper TOC
+* write paper abstract
+** flip-flop example
+* temporal assertions
+
+BIG TASKS:
+* signal tracing
+** --save history in a list--
+** dump history to vcd file
+* examples:
+** flip-flop example
+** lfsr example
+** FIR filter example
+** IIR filter example
+** adaptive FIR filter example
+** stock market example
+** ping pong example
+
+
+DEFER:
+
+DELEGATE:
+
+COLLECT:
+* preemptive evaluation of threads
+* preemptive evaluation of event callbacks
+* execution of threads in random order(to simulate race conditions)
+* execution of event callbacks in random order
+* write simulator-related documentation
+
+REFERENCE:
+
+INCUBATOR:
+
+TRASH:
+
+--------------------------------------------------------------------------------------- 
+
+IN PROGRESS:
+
+TODO : 
+* vplan and verification env and coverage collection
+* accessing self handle from inside a thread
+* accessing the handles of other threads from inside a threads
+* running multiple threads from inside a thread and joining them in various ways:
+** join
+** join_any
+** join_none
+* killing all child threads
+* first release
+** readme file with basic usage instructions
+** examples
+* simulating communication
+** method ports
+** reactive interfaces
+* temporal expressions
+* temporal assertions
+* non-blocking assignments
+* constrained random number generation
+* temporal decoupling
+* final release:
+** instalation setup scripts
+** full documentation
+** comprehensive code base
+*** should include : simulating production software
+*** should include : simulating the simulator
+** tutorial with simple examples
+* access control
+** mutexes(locks)
+** semaphores
+* preemptive evaluation
+** allow the user to decide which type odf evaluation to use
+* refactor the code
+
+
