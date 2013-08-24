@@ -109,7 +109,7 @@ class Simulator:
 	# Update threads waiting for time
 	def advance_time(self,time_limit=-1):
 		self.delta=0
-		min_time=0
+		#min_time=0
 		min_time=min(self.times_to_wait.values())
 		for t,wt in self.times_to_wait.items():
 			if(wt==min_time):
@@ -249,7 +249,123 @@ class Simulator:
 		try: del self.threads_to_wait[t]
 		except: pass
 
+# VCD handling taken from MyHDL
+codechars = ""
+for i in range(33, 127):
+	codechars += chr(i)
+mod = len(codechars)
 
+def gen_name_code():
+	n = 0
+	while 1:
+		yield namecode(n)
+		n += 1
+
+def namecode(n):
+	q, r = divmod(n, mod)
+	code = codechars[r]
+	while q > 0:
+		q, r = divmod(q, mod)
+		code = codechars[r] + code
+	return code
+
+
+class vcd_handler:
+	def __init__(self,simulator,fname):
+		self.sim=simulator
+		self.timescale="1ps"
+		self.f = open(fname,"w")
+	
+	# Taken from MyHDL
+	def int2bitstring(self,num):
+		if num == 0:
+			return '0'
+		if abs(num) == 1:
+			return '1'
+		bits = []
+		p, q = divmod(num, 2)
+		bits.append(str(q))
+		while not (abs(p) == 1):
+			p, q = divmod(p, 2)
+			print "p=%d" % p
+			bits.append(str(q))
+		bits.append('1')
+		bits.reverse()
+		return ''.join(bits)
+
+
+	def bin(self,num, width=0):
+		"""Return a binary string representation.
+
+		num -- number to convert
+		Optional parameter:
+		width -- specifies the desired string (sign bit padding)
+		"""
+		num = long(num)
+		s = self.int2bitstring(num)
+		if width:
+			pad = '0'
+			if num < 0:
+				pad = '1'
+				return (width - len(s)) * pad + s
+		return s 
+
+	
+	def write_header(self):
+		print >> self.f, "$date"
+		print >> self.f, "    %s" % time.asctime()
+		print >> self.f, "$end"
+		print >> self.f, "$version"
+		print >> self.f, "    PyDesk 0.0.1"
+		print >> self.f, "$end"
+		print >> self.f, "$timescale"
+		print >> self.f, "    %s" % self.timescale
+		print >> self.f, "$end"
+		print >> self.f
+
+	def write_sig_decl(self,comp):
+		namegen = gen_name_code()
+		# Add signals from current component
+		sigs = [it for it in self.sim.state_variables if it.parent==comp]
+		print >> self.f, "$scope module "+comp.name+" $end"
+		for s in sigs:
+			s.vcd_id = namegen.next()
+			print >> self.f, "$var wire "+str(s.bit_size)+" "+s.vcd_id+" "+s.name+" $end"
+		# Add signals from child components
+		if comp.has_children():
+			for c in comp.get_children():
+				self.write_sig_decl(c)
+		# Close current scope
+		print >> self.f, "$upscope $end"
+	
+	def write_sig_dump(self):
+		# Initial values
+		print >> self.f, "$dumpvars"
+		for s in self.sim.state_variables:
+			print >> self.f, "b%s %s" % (self.bin(s.first_value,s.bit_size), s.vcd_id)
+		print >> self.f, "$end"
+		# Dump value changes
+		times = []
+		for s in self.sim.state_variables:
+			for t in s.history.keys():
+				if not t in times:
+					times.append(t)
+		times.sort()
+		for t in times:
+			print >> self.f, "#%d" % (t)
+			for s in self.sim.state_variables:
+				if t in s.history.keys():
+					print >> self.f, "b%s %s" % (self.bin(s.history[t],s.bit_size), s.vcd_id)
+	
+	def write_vcd(self):
+		self.write_header()
+		roots = filter(lambda x:self.sim.components[x]==None,self.sim.components.keys())
+		for c in roots:
+			self.write_sig_decl(c)
+		print >> self.f, "$enddefinitions $end"
+		self.write_sig_dump()
+		self.f.close()
+		
 # Event - a message indicating that something has happened
 class Event:
 	def __init__(self,name="",sim=None):
@@ -300,7 +416,7 @@ class Component:
 			self.parent=parent
 		self.sim.register_component(self)
 	
-	def temporal_expr(te):
+	def temporal_expr(self,te):
 		result_ev = Event(sim=self.sim)
 		def te_thread(te_copy):
 			while True:
@@ -350,32 +466,35 @@ def Simulate(comp):
 class state_variable:
 	def __init__(self,value=None,name="",parent=None):
 		self.name=name
-		self.sim=parent if isinstance(parent,Simulator) else self.sim if isinstance(parent,Component) else None
+		self.sim=parent if isinstance(parent,Simulator) else parent.sim if isinstance(parent,Component) else None
+		self.parent = parent
+		self.first_value=0
 		self.prev_value=0
 		self.value=value
 		self.others = []
 		self.with_trace = True
-		self.history = []
+		self.history = {}
 		self.bit_size = 32
 		self.rise = Event(sim=self.sim)
 		self.fall = Event(sim=self.sim)
 		self.change = Event(sim=self.sim)
 		self.compare_func = None
-		if sim!=None:
-			sim.state_variables.append(self)
+		self.vcd_id='a'
+		if self.sim!=None:
+			self.sim.state_variables.append(self)
 	
 	def __le__(self,other):
 		if(self.sim!=None):
 			self.sim.schedule_assignment(self,other)
 			for o in self.others:
-				sim.schedule_assignment(o,other)
+				self.sim.schedule_assignment(o,other)
 	
 	def do_assign(self,other):
 		self.value = other
 			
 	def do_update(self):
 		if self.with_trace:
-			self.history.append((self.sim.time,self.value))
+			self.history[self.sim.time]=self.value
 		if(isinstance(self.value,(int,long,float))):
 			if(self.value>self.prev_value): self.rise.emit()
 			if(self.value<self.prev_value): self.fall.emit()
@@ -387,10 +506,6 @@ class state_variable:
 		else:
 			if(self.value!=self.prev_value): self.fall.emit()
 		self.prev_value=self.value
-
-		
-
-		
 	
 	def connect(self,other):
 		self.others.append(other)

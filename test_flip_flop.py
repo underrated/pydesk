@@ -3,9 +3,12 @@ from pydesk import *
 class flip_flop(Component):
 	def __init__(self,name,parent):
 		Component.__init__(self,name,parent)
-		self.clk = state_variable(0,"clk",sim)
-		self.in_s = state_variable(0,"in_s",sim)
-		self.out_s = state_variable(0,"out_s",sim)
+		self.clk = state_variable(0,"clk",self)
+		self.clk.bit_size = 1
+		self.in_s = state_variable(0,"in_s",self)
+		self.in_s.bit_size = 1
+		self.out_s = state_variable(0,"out_s",self)
+		self.out_s.bit_size = 1
 
 	def on_clk(self):
 		print "time:"+str(self.sim.time)+" Clock changed from "+str(self.clk.prev_value)+" to "+str(self.clk.value)
@@ -72,6 +75,8 @@ sim = Simulator()
 top = ff_tb("top",sim)
 #import pdb; pdb.set_trace()
 sim.simulate_comp()
+vcd_h = vcd_handler(sim,"result.vcd")
+vcd_h.write_vcd()
 
 
 
