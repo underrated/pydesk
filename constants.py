@@ -16,7 +16,8 @@ thread_finished = 4
 ## Wait statements(context switches)
 wait_time = 0
 wait_event = 1
-wait_thread = 2
+sync_event = 2
+wait_thread = 3
 ## Query commands
 ## (they don't allow other threads to continue)
 ## (they are only uses as simulator-thread communication channels)
