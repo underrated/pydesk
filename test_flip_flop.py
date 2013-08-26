@@ -41,8 +41,9 @@ class ff_tb(Component):
 		self.clk_thread = None
 	
 	def drive_clk(self):
-		print "time="+str(self.sim.time)+" clk="+str(self.ff.clk.value)
 		self.clk_thread = yield sim_cmd,get_thread_self
+		self.ff.clk.value = 1
+		print "time="+str(self.sim.time)+" clk="+str(self.ff.clk.value)
 		while True:
 			#print "Old clock is "+str(self.ff.clk.value)
 			yield wait_time,5
