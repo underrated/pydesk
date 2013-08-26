@@ -10,6 +10,7 @@ class Simulator:
 		self.threads = [ ]
 		self.times_to_wait = { }
 		self.events_to_wait = { }
+		self.events_to_sync = { }
 		self.emitted_events = [ ]
 		self.events_to_fire = [ ]
 		self.threads_to_wait = { }
@@ -52,9 +53,10 @@ class Simulator:
 				if state[0]==wait_time:
 					self.thread_states[t]=thread_waiting_time
 					self.times_to_wait[t] = state[1]
-				elif state[0]==wait_event:
+				elif state[0] in (wait_event, sync_event):
 					self.thread_states[t]=thread_waiting_event
-					self.events_to_wait[t] = state[1]
+					if(state[0]==wait_event): self.events_to_wait[t] = state[1]
+					if(state[0]==sync_event): self.events_to_sync[t] = state[1]
 					self.events_to_wait[t].add_listener()
 				elif state[0]==wait_thread:
 					self.thread_states[t]=thread_waiting_thread
@@ -132,11 +134,20 @@ class Simulator:
 
 	# Update threads waiting for events
 	def advance_delta(self,delta_limit=-1):	
+		# Events to wait
 		for t,e in self.events_to_wait.items():
+			if(e.state==event_on):
+				if(self.time!=e.emit_time):
+					self.thread_states[t]=thread_running
+					del self.events_to_wait[t]
+				e.consume()
+		# Events to sync
+		for t,e in self.events_to_sync.items():
 			if(e.state==event_on):
 				self.thread_states[t]=thread_running
 				e.consume()
-				del self.events_to_wait[t]
+				del self.events_to_sync[t]
+
 		# Schedule execution of sync callbacks	
 		self.events_to_fire = self.emitted_events[:]
 		# Clear list of emitted events for the next delta cycle
@@ -151,7 +162,7 @@ class Simulator:
 		if self.verbose: print "==="
 		if self.verbose: print "==New thread states:"
 		if self.verbose: print self.thread_states
-		if self.verbose: print "==New times to wait:"
+		if self.verbose: print "==New times to wait:" 
 		if self.verbose: print self.times_to_wait
 		return continue_simulation
 	
@@ -375,6 +386,7 @@ class Event:
 		self.listeners = 0
 		self.name = name
 		self.sim = sim
+		self.emit_time = -1
 	
 	def consume(self):
 		self.listeners = self.listeners-1 if self.listeners>0 else 0
@@ -388,6 +400,7 @@ class Event:
 		self.state=event_on
 		if self.sim!=None :
 			self.sim.emitted_events.append(self)
+			self.emit_time = self.sim.time
 	
 	def run_async_callbacks(self):
 		for cb in self.async_callbacks:
@@ -430,7 +443,7 @@ class Component:
 							if(isinstance(e[0],(int,long,float)) and isinstance(e[1],Event)):
 								for i in range(e[0]):
 									yield wait_event,e[1]
-					else:pass # Crash with a severe error message
+					else:pass # TODO : Crash with a severe error message
 				result_ev.emit()
 		self.start(te_thread(te))
 		return result_ev
