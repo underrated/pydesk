@@ -31,6 +31,7 @@ TODO:
 * write paper abstract
 ** flip-flop example
 * temporal assertions
+* threads waiting for events should be resumed 1st, threads waiting for time 2nd
 
 BIG TASKS:
 * signal tracing
