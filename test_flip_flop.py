@@ -5,17 +5,19 @@ class flip_flop(Component):
 		Component.__init__(self,name,parent)
 		self.clk = state_variable(0,"clk",self)
 		self.clk.bit_size = 1
+		self.clk.first_value = 1
+		self.clk.prev_value = 1
 		self.in_s = state_variable(0,"in_s",self)
 		self.in_s.bit_size = 1
 		self.out_s = state_variable(0,"out_s",self)
 		self.out_s.bit_size = 1
 
 	def on_clk(self):
-		print "time:"+str(self.sim.time)+" Clock changed from "+str(self.clk.prev_value)+" to "+str(self.clk.value)
+		print "time:"+str(self.sim.time)+" Clock rise : Clock changed from "+str(self.clk.prev_value)+" to "+str(self.clk.value)
 		self.out_s <= self.in_s.value
 
 	def on_clk_fall(self):
-		print "time:"+str(self.sim.time)+" Clock changed from "+str(self.clk.prev_value)+" to "+str(self.clk.value)
+		print "time:"+str(self.sim.time)+" Clock fall : Clock changed from "+str(self.clk.prev_value)+" to "+str(self.clk.value)
 
 	def on_clk_change(self):
 		print "*SAMPLE* time:"+str(self.sim.time)+" clk:"+str(self.clk.value)+" in_s:"+str(self.in_s.value)+" self.out_s:"+str(self.out_s.value)
@@ -55,22 +57,23 @@ class ff_tb(Component):
 		print "===Step 1==="
 		print "time="+str(self.sim.time)+" clk="+str(self.ff.clk.value)
 		self.ff.in_s.value= 0
-		for i in range(3): yield wait_event, self.ff.clk.rise
+		for i in range(3): yield sync_event, self.ff.clk.rise
 		print "===Step 2==="
 		print "time="+str(self.sim.time)+" clk="+str(self.ff.clk.value)
 		self.ff.in_s.value = 1
-		for i in range(3): yield wait_event, self.ff.clk.rise
+		for i in range(3): yield sync_event, self.ff.clk.rise
 		print "===Step 3==="
 		print "time="+str(self.sim.time)+" clk="+str(self.ff.clk.value)
 		self.ff.in_s.value = 0
-		for i in range(2): yield wait_event, self.ff.clk.rise
-		
+		for i in range(2): yield sync_event, self.ff.clk.rise
+		print "time="+str(self.sim.time)+" Killing clock thread"
 		self.kill_thread(self.clk_thread)
 	
 	def run(self):
 		print "Setting up tb"
-		self.start(self.drive_clk())
+		# TODO : The order in which they are started matters - it shouldn't
 		self.start(self.drive_signals())
+		self.start(self.drive_clk())
 
 sim = Simulator()
 top = ff_tb("top",sim)

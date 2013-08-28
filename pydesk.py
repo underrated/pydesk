@@ -55,9 +55,12 @@ class Simulator:
 					self.times_to_wait[t] = state[1]
 				elif state[0] in (wait_event, sync_event):
 					self.thread_states[t]=thread_waiting_event
-					if(state[0]==wait_event): self.events_to_wait[t] = state[1]
-					if(state[0]==sync_event): self.events_to_sync[t] = state[1]
-					self.events_to_wait[t].add_listener()
+					if(state[0]==wait_event):
+						self.events_to_wait[t] = state[1]
+						self.events_to_wait[t].add_listener()
+					if(state[0]==sync_event):
+						self.events_to_sync[t] = state[1]
+						self.events_to_sync[t].add_listener()
 				elif state[0]==wait_thread:
 					self.thread_states[t]=thread_waiting_thread
 					self.threads_to_wait[t] = state[1]
@@ -192,6 +195,7 @@ class Simulator:
 				continue
 			else:
 				break
+		return end_of_simulation
 
 
 	# Run a simulation with components
@@ -256,6 +260,8 @@ class Simulator:
 		try: del self.times_to_wait[t]
 		except: pass				
 		try: del self.events_to_wait[t]
+		except: pass
+		try: del self.events_to_sync[t]
 		except: pass
 		try: del self.threads_to_wait[t]
 		except: pass
@@ -517,7 +523,7 @@ class state_variable:
 			if self.compare_func(self.value,self.prev_value)<0: self.fall.emit()
 			if self.ompare_func(self.value,self.prev_value)!=0: self.change.emit()
 		else:
-			if(self.value!=self.prev_value): self.fall.emit()
+			if(self.value!=self.prev_value): self.change.emit()
 		self.prev_value=self.value
 	
 	def connect(self,other):
