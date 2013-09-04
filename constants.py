@@ -6,30 +6,29 @@ end_of_simulation = 0
 continue_simulation = 1
 
 # Thread states
-thread_running = 0
-thread_waiting_time = 1
-thread_waiting_event = 2
-thread_waiting_thread = 3
-thread_finished = 4
+thread_running = "thread_running"
+thread_waiting_time = "thread_waiting_time"
+thread_waiting_event = "thread_waiting_event"
+thread_waiting_thread = "thread_waiting_thread"
+thread_finished = "thread_finished"
 
 # Simulator commands
 ## Wait statements(context switches)
-wait_time = 0
-wait_event = 1
-sync_event = 2
-wait_thread = 3
+wait_time = "wait_time"
+wait_event = "wait_event"
+wait_thread = "wait_thread"
 ## Query commands
 ## (they don't allow other threads to continue)
 ## (they are only uses as simulator-thread communication channels)
-sim_cmd = 3
-get_thread_self = 4
-get_children_threads = 5
-start_thread = 6
-fork_join = 7
-fork_join_none = 8
-fork_join_any = 9
-all_of = 10
-first_of = 11
+sim_cmd = "sim_cmd"
+get_thread_self = "get_thread_self"
+get_children_threads = "get_children_threads"
+start_thread = "start_thread"
+fork_join = "fork_join"
+fork_join_none = "fork_join_none"
+fork_join_any = "fork_join_any"
+all_of = "all_of"
+first_of = "first_of"
 
 # Event states
 event_on=1
