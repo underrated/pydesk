@@ -10,7 +10,6 @@ class Simulator:
 		self.threads = [ ]
 		self.times_to_wait = { }
 		self.events_to_wait = { }
-		self.events_to_sync = { }
 		self.emitted_events = [ ]
 		self.events_to_fire = [ ]
 		self.threads_to_wait = { }
@@ -20,7 +19,7 @@ class Simulator:
 		self.thread_parents = { }
 		self.state_variables = []
 		self.time = 0
-		self.delta = 0
+		self.delta = 0 
 		self.thread_counter = 0
 		self.verbose = 0
 		self.scheduled_assignments = { }
@@ -53,14 +52,10 @@ class Simulator:
 				if state[0]==wait_time:
 					self.thread_states[t]=thread_waiting_time
 					self.times_to_wait[t] = state[1]
-				elif state[0] in (wait_event, sync_event):
+				elif state[0] == wait_event:
 					self.thread_states[t]=thread_waiting_event
-					if(state[0]==wait_event):
-						self.events_to_wait[t] = state[1]
-						self.events_to_wait[t].add_listener()
-					if(state[0]==sync_event):
-						self.events_to_sync[t] = state[1]
-						self.events_to_sync[t].add_listener()
+					self.events_to_wait[t] = state[1]
+					self.events_to_wait[t].add_listener()
 				elif state[0]==wait_thread:
 					self.thread_states[t]=thread_waiting_thread
 					self.threads_to_wait[t] = state[1]
@@ -137,20 +132,12 @@ class Simulator:
 
 	# Update threads waiting for events
 	def advance_delta(self,delta_limit=-1):	
-		# Events to wait
-		for t,e in self.events_to_wait.items():
-			if(e.state==event_on):
-				if(self.time!=e.emit_time):
-					self.thread_states[t]=thread_running
-					del self.events_to_wait[t]
-				e.consume()
 		# Events to sync
-		for t,e in self.events_to_sync.items():
-			if(e.state==event_on):
+		for t,e in self.events_to_wait.items():
+			if e.state == event_on:
 				self.thread_states[t]=thread_running
 				e.consume()
-				del self.events_to_sync[t]
-
+				del self.events_to_wait[t]
 		# Schedule execution of sync callbacks	
 		self.events_to_fire = self.emitted_events[:]
 		# Clear list of emitted events for the next delta cycle
@@ -261,8 +248,6 @@ class Simulator:
 		except: pass				
 		try: del self.events_to_wait[t]
 		except: pass
-		try: del self.events_to_sync[t]
-		except: pass
 		try: del self.threads_to_wait[t]
 		except: pass
 
@@ -304,7 +289,7 @@ class vcd_handler:
 		bits.append(str(q))
 		while not (abs(p) == 1):
 			p, q = divmod(p, 2)
-			print "p=%d" % p
+			#print "p=%d" % p
 			bits.append(str(q))
 		bits.append('1')
 		bits.reverse()
@@ -499,6 +484,8 @@ class state_variable:
 		self.change = Event(sim=self.sim)
 		self.compare_func = None
 		self.vcd_id='a'
+		self.expr = lambda x:x[0]
+		self.assign_var_list = []
 		if self.sim!=None:
 			self.sim.state_variables.append(self)
 	
@@ -512,8 +499,13 @@ class state_variable:
 		self.value = other
 			
 	def do_update(self):
-		if self.with_trace:
+		# Update combinational assigns
+		if self.assign_var_list!=[]:
+			self.value = self.expr(self.assign_var_list)
+		# Update signal history
+		if self.with_trace and self.value!=self.prev_value:
 			self.history[self.sim.time]=self.value
+		# Emit events
 		if(isinstance(self.value,(int,long,float))):
 			if(self.value>self.prev_value): self.rise.emit()
 			if(self.value<self.prev_value): self.fall.emit()
@@ -524,6 +516,7 @@ class state_variable:
 			if self.ompare_func(self.value,self.prev_value)!=0: self.change.emit()
 		else:
 			if(self.value!=self.prev_value): self.change.emit()
+		#Update prev value
 		self.prev_value=self.value
 	
 	def connect(self,other):
@@ -531,6 +524,14 @@ class state_variable:
 
 	def disconnect(self,other):
 		self.others.remove(other)
+	
+	def assign_var(self,other):
+		self.expr = lambda x: x[0]
+		self.assign_var_list = [other]
+	
+	def assign_expr(self,expr,others):
+		self.expr = expr
+		self.assign_var_list = others
 
 
 # Ports
@@ -604,11 +605,13 @@ class reactive_channel:
 		self.out_value = None
 
 ## FIFO ports
-class in_fifo_port:
-	pass
+class in_fifo_port(Component):
+	def __init__(self,name,parent):
+		pass
 
-class out_fifo_port:
-	pass
+class out_fifo_port(Component):
+	def __init__(self,name,parent):
+		pass
 
 class fifo_channel:
 	pass
