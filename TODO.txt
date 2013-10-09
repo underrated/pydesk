@@ -9,36 +9,69 @@ DONE :
 * starting a thread from another thread
 * run a thread inside another thread and wait for it to finish
 * killing another thread
+* write paper TOC
+* write paper abstract
+* accessing self handle from inside a thread
+** flip-flop example
+* rise , fall, change events
+* The removal of threads is not working, FIX IT
+* fork join, join_none, join_any
 
 -------------------------------------------------------------------------------------------
 VERIFIED:
 * get pointer to self thread
 * update component simulation
 
+TESTED:
+* temporal expressions
+* nb assignments
+** dump history to vcd file
+
+
 IMPLEMENTED:
 * get list of pointers to children threads
-* nb assignments
 * kill all children threads
 ** save history in a list
-* rise , fall, change events
-* temporal expressions
 
 TODO:
-* fork join, join_none, join_any
+*-------------------------------------
+ Mutexes
+- Analysis ports and fifos
+- Put/Get ports
+- protocol phases(for AT)
+- generic payload
+- error command
+- finish simulation command
+- enable disable messages and errors by id
+- advanced temporal expressions:
+** overload '*' operator to multiply events, e.g. 3*my_event returns and event emitted at every 3 occurrences of my_event
+** overload '&' and '|' operators to combine events into disjunctive or conjunctive results
+*** ev1 & ev2
+***ev1 | ev2
+** (1,3)*my_event : emitted everytime my_event occurs 1 to 3 times
+** (n,Inf)*my_event : emitted for at least n occurrences of my_event
+** ev1>>ev2 - ev2 happens at any time after ev1
+** ev1>>10 - ev1 happens then 10 tu's pass
+** 10>>ev1 - 10 tu's pass then ev1 happens
+** ev1>>(5,13) - ev1 happens then between 5 and 13 tu's pass
+** sampling events : ev1<<ev2 - ev1 happened between 2 occurrences of ev2
+** example:
+me.my_ev = ( ((me.ev1&me.ev2) | me.ev3) >> (10,100) >> (3,Inf) * me.ev4 ) << me.clk_rise
+- connecting and updating of events and state variables
+** every event and state var will have 2 sets: sources and targets
+** the 2 sets must not have common elements
+** the updating of state variables and events must be done in a certain order
+**** what order???
+*-------------------------------------
 * access control : mutexes, semaphores
-** dump history to vcd file
-* write paper TOC
-* write paper abstract
-** flip-flop example
 * temporal assertions
 
 BIG TASKS:
 * signal tracing
 ** --save history in a list--
-** dump history to vcd file
+** --dump history to vcd file-
 * examples:
-** flip-flop example
-** lfsr example
+** --lfsr example--
 ** FIR filter example
 ** IIR filter example
 ** adaptive FIR filter example
@@ -56,13 +89,14 @@ COLLECT:
 * execution of threads in random order(to simulate race conditions)
 * execution of event callbacks in random order
 * write simulator-related documentation
+* sim command that ends the simulation(e.g. yield finish)
+* sim command that ends the simulation with an error(e.g. yield sim.error("ERR_ID","Something bad happenedS")
 
 REFERENCE:
 
 INCUBATOR:
 
 TRASH:
-* threads waiting for events should be resumed 1st, threads waiting for time 2nd
 
 --------------------------------------------------------------------------------------- 
 
@@ -70,7 +104,6 @@ IN PROGRESS:
 
 TODO : 
 * vplan and verification env and coverage collection
-* accessing self handle from inside a thread
 * accessing the handles of other threads from inside a threads
 * running multiple threads from inside a thread and joining them in various ways:
 ** join
@@ -83,7 +116,6 @@ TODO :
 * simulating communication
 ** method ports
 ** reactive interfaces
-* temporal expressions
 * temporal assertions
 * non-blocking assignments
 * constrained random number generation
