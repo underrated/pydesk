@@ -442,8 +442,11 @@ class Event:
 		self.sim = sim
 		self.emit_time = -1
 		self.sources = set([])
+		self.source_states = { }
+		self.counter = 0
+		self.source_data = { }
 		self.targets = set([])
-		self.source_type = ""
+		self.te_type = ""
 	
 	def consume(self):
 		self.listeners = self.listeners-1 if self.listeners>0 else 0
@@ -455,6 +458,8 @@ class Event:
 	
 	def emit(self):
 		self.state=event_on
+		for target in self.targets:
+			target.trigger(self)
 		if self.sim!=None :
 			self.sim.emitted_events.append(self)
 			self.emit_time = self.sim.time
@@ -472,6 +477,48 @@ class Event:
 	
 	def register_sync_callback(self,cb):
 		self.sync_callbacks.append(cb)
+	
+	def trigger(self,other):
+		if other in self.source_states.keys():
+			self.source_states[other]=event_on;
+
+		if te_type=='>>':
+			done=reduce(lambda x,y:x and y, self.source_states.values())
+			if done:
+				self.emit()
+				for k in self.source_states.keys():
+					self.source_states[k]=event_off
+
+		elif te_type=="&":
+			pass
+		elif te_type=="|":
+			done=reduce(lambda x,y:x or y, self.source_states.values())
+			if done:
+				self.emit()
+				for k in self.source_states.keys():
+					self.source_states[k]=event_off
+		elif te_type=="<<":
+			pass
+		elif te_type=="*":
+			pass
+			
+
+	def __rshift__(self, other):
+		result=None
+		if isinstance(other,Event):
+			result=Event(self.name+'>>'+other.name,self.sim)
+			self.targets.append(result)
+			other.targets.append(result)
+			result.source_states[self]=event_off
+			result.source_states[other]=event_off
+			result.te_type=">>"
+		elif type(other) is IntType:
+			pass
+		elif type(other) is TupleType:
+			pass
+
+		return result
+
 
 # Component - a collection of threads,events and state variables
 class Component:
