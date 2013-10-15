@@ -1,62 +1,97 @@
+import unittest
+import random
+
 from pydesk import *
 
-class flip_flop(Component):
-    def __init__(self,name,parent):
-        Component.__init__(self,name,parent)
-        self.clk = state_variable(0,"clk",self)
-        self.clk.bit_size = 1
-        self.in_s = state_variable(0,"in_s",self)
-        self.in_s.bit_size = 1
-        self.out_s = state_variable(0,"out_s",self)
-        self.out_s.bit_size = 1
-
-    def on_clk(self):
-        self.out_s <= self.in_s.value
-
-    def run(self):
-        print "Setting up flip flop"
-        self.clk.rise.register_sync_callback(self.on_clk)
-
-class ff_tb(Component):
-    def __init__(self,name,parent):
-        Component.__init__(self,name,parent)
-        self.ff = flip_flop("ff",self)
-        self.clk_thread = None
-    
-    def drive_clk(self):
-        self.clk_thread = yield sim_cmd,get_thread_self
-        self.ff.clk.value = 1
-        while True:
-            #print "Old clock is "+str(self.ff.clk.value)
-            yield wait_time,5
-            self.ff.clk.value = int(not self.ff.clk.value)
-            #print "New clock should be "+str(self.ff.clk.value^1)
-            #print "New actually is "+str(self.ff.clk.value^1)
-
-    def drive_signals(self):
-        self.ff.in_s.value = 0
-        # for i in range(3): yield wait_event, self.ff.clk.rise
-        yield wait_event, self.te([(3,self.ff.clk.rise)])
-        self.ff.in_s.value = 1
-        #for i in range(3): yield wait_event, self.ff.clk.rise
-        yield wait_event, self.te([(3,self.ff.clk.rise)])
-        self.ff.in_s.value = 0
-        #for i in range(2): yield wait_event, self.ff.clk.rise
-        yield wait_event, self.te([(2,self.ff.clk.rise)])
+class SelfThreadTest(unittest.TestCase):
         
-        self.kill_thread(self.clk_thread)
-    
-    def run(self):
-        print "Setting up tb"
-        self.start(self.drive_clk())
-        self.start(self.drive_signals())
-
-sim = Simulator()
-top = ff_tb("top",sim)
-#import pdb; pdb.set_trace()
-sim.simulate_comp()
-vcd_h = vcd_handler(sim,"result.vcd")
-vcd_h.write_vcd()
-
-
+    def testOrder(self):
+        def thread1(sim):
+            sim.message("thread1","Emitting ev1")
+            self.ev1.emit()
+            sim.message("thread1","Waiting 10 tus")
+            yield wait_time,10
+            sim.message("thread1","Emitting ev2")
+            self.ev2.emit()
+            sim.message("thread1","Waiting 10 tus")
+            yield wait_time,10
+        
+        def thread2(sim):
+            sim.message("thread2","Waiting for ev3")
+            yield wait_event,self.ev3
+            sim.message("thread2","Received ev3")
+            sim.message("thread2","Waiting 20 tus")
+            yield wait_time,20
+            sim.message("thread2","EOS")
+        
+        sim = Simulator()
+        self.ev1 = Event("ev1",sim)
+        self.ev2 = Event("ev2",sim)
+        self.ev3 = self.ev1>>self.ev2
+        sim.register_thread(thread1(sim))
+        sim.register_thread(thread2(sim))
+        sim.simulate()
+        self.assertEqual(sim.time, 30)
+        
+    def testOr(self):
+        def thread1(sim):
+            sim.message("thread1","Emitting ev1")
+            self.ev1.emit()
+            sim.message("thread1","Waiting 10 tus")
+            yield wait_time,10
+            sim.message("thread1","Emitting ev2")
+            self.ev2.emit()
+            sim.message("thread1","Waiting 10 tus")
+            yield wait_time,10
+        
+        def thread2(sim):
+            sim.message("thread2","Waiting for ev3")
+            yield wait_event,self.ev3
+            sim.message("thread2","Received ev3")
+            sim.message("thread2","Waiting 20 tus")
+            yield wait_time,20
+            sim.message("thread2","EOS")
+        def ev4_cb():
+            sim.message("ev4_cb","ev4 has been emitted")
+        
+        sim = Simulator()
+        self.ev1 = Event("ev1",sim)
+        self.ev2 = Event("ev2",sim)
+        self.ev3 = self.ev1 | self.ev2
+        self.ev4 = (self.ev1 | self.ev3)>>self.ev2
+        self.ev4.register_sync_callback(ev4_cb)
+        sim.register_thread(thread1(sim))
+        sim.register_thread(thread2(sim))
+        sim.simulate()
+        self.assertEqual(sim.time, 20)
+        
+    def testRepeat(self):
+        def thread1(sim):
+            for i in range(5):
+                sim.message("thread1","i={0}".format(i))
+                sim.message("thread1","Emitting ev1")
+                self.ev1.emit()
+                sim.message("thread1","Waiting 10 tus")
+                yield wait_time,10
+            sim.message("thread1","EOS")
+        
+        def thread2(sim):
+            sim.message("thread2","Waiting for ev2")
+            yield wait_event,self.ev2
+            sim.message("thread2","Received ev2")
+            sim.message("thread2","Waiting 20 tus")
+            yield wait_time,20
+            sim.message("thread2","EOS")
+        
+        sim = Simulator()
+        self.ev1 = Event("ev1",sim)
+        self.ev2 = 3*self.ev1
+        sim.register_thread(thread1(sim))
+        sim.register_thread(thread2(sim))
+        sim.simulate()
+        self.assertEqual(sim.time, 50)
+        
+        
+if __name__=='__main__':
+    unittest.main()
 
