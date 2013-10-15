@@ -441,11 +441,11 @@ class Event:
 		self.name = name
 		self.sim = sim
 		self.emit_time = -1
-		self.sources = set([])
+		self.sources = []
 		self.source_states = { }
 		self.counter = 0
 		self.source_data = { }
-		self.targets = set([])
+		self.targets = []
 		self.te_type = ""
 	
 	def consume(self):
@@ -458,6 +458,7 @@ class Event:
 	
 	def emit(self):
 		self.state=event_on
+		self.run_async_callbacks()
 		for target in self.targets:
 			target.trigger(self)
 		if self.sim!=None :
@@ -482,25 +483,32 @@ class Event:
 		if other in self.source_states.keys():
 			self.source_states[other]=event_on;
 
-		if te_type=='>>':
+		if self.te_type=='>>':
 			done=reduce(lambda x,y:x and y, self.source_states.values())
 			if done:
 				self.emit()
 				for k in self.source_states.keys():
 					self.source_states[k]=event_off
 
-		elif te_type=="&":
+		elif self.te_type=="&":
 			pass
-		elif te_type=="|":
+		elif self.te_type=="|":
 			done=reduce(lambda x,y:x or y, self.source_states.values())
 			if done:
 				self.emit()
 				for k in self.source_states.keys():
 					self.source_states[k]=event_off
-		elif te_type=="<<":
+		elif self.te_type=="<<":
 			pass
-		elif te_type=="*":
-			pass
+		elif self.te_type=="*":
+			if other in self.source_data.keys():
+				if type(self.source_data[other]) is IntType:
+					self.counter-=1
+					if self.counter<=0:
+						self.emit()
+						self.counter=self.source_data[other]
+				elif type(self.source_data[other]) is TupleType:
+					pass
 			
 
 	def __rshift__(self, other):
@@ -511,13 +519,39 @@ class Event:
 			other.targets.append(result)
 			result.source_states[self]=event_off
 			result.source_states[other]=event_off
-			result.te_type=">>"
 		elif type(other) is IntType:
 			pass
 		elif type(other) is TupleType:
 			pass
 
+		result.te_type=">>"
 		return result
+	
+	def __or__(self,other):
+		if isinstance(other,Event):
+			result=Event(self.name+'|'+other.name,self.sim)
+			self.targets.append(result)
+			other.targets.append(result)
+			result.source_states[self]=event_off
+			result.source_states[other]=event_off
+		elif type(other) is IntType:
+			pass
+		elif type(other) is TupleType:
+			pass
+
+		result.te_type="|"
+		return result
+	
+	def __mul__(self,other):
+		result = Event(self.name+'*'+str(other),self.sim)
+		self.targets.append(result)
+		result.source_data[self]=other
+		result.counter=other
+		result.te_type='*'
+		return result
+	def __rmul__(self,other):
+		return self.__mul__(other)
+		
 
 
 # Component - a collection of threads,events and state variables
