@@ -3,7 +3,7 @@ import random
 
 from pydesk import *
 
-class SelfThreadTest(unittest.TestCase):
+class TempExprTest(unittest.TestCase):
         
     def testOrder(self):
         def thread1(sim):
@@ -60,6 +60,33 @@ class SelfThreadTest(unittest.TestCase):
         self.ev3 = self.ev1 | self.ev2
         self.ev4 = (self.ev1 | self.ev3)>>self.ev2
         self.ev4.register_sync_callback(ev4_cb)
+        sim.register_thread(thread1(sim))
+        sim.register_thread(thread2(sim))
+        sim.simulate()
+        self.assertEqual(sim.time, 20)
+        
+    def testAnd(self):
+        def thread1(sim):
+            sim.message("thread1","Emitting ev1")
+            self.ev1.emit()
+            sim.message("thread1","Emitting ev2")
+            self.ev2.emit()
+            sim.message("thread1","Waiting 10 tus")
+            yield wait_time,10
+            sim.message("thread1","Done 10 tus")
+        
+        def thread2(sim):
+            sim.message("thread2","Waiting for ev3")
+            yield wait_event,self.ev3
+            sim.message("thread2","Received ev3")
+            sim.message("thread2","Waiting 20 tus")
+            yield wait_time,20
+            sim.message("thread2","EOS")
+        
+        sim = Simulator()
+        self.ev1 = Event("ev1",sim)
+        self.ev2 = Event("ev2",sim)
+        self.ev3 = self.ev1 & self.ev2
         sim.register_thread(thread1(sim))
         sim.register_thread(thread2(sim))
         sim.simulate()

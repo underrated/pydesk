@@ -31,6 +31,7 @@ class Simulator:
 		self.disabled_messages = []
 		self.disabled_errors = []
 		self.disabled_warnings = []
+		self.with_real_time = False
 	
 	# Resume all threads that are scheduled to run
 	def evaluate(self):
@@ -110,6 +111,9 @@ class Simulator:
 				self.register_component_thread(self.thread_components[t],query[2],t)
 			else:
 				self.register_thread(query[2],t)
+			self.resume_thread(t)
+		elif query[1]==get_lock:
+			self.resume_thread(t)
 		return state
 	
 	# Update simulation state
@@ -139,6 +143,8 @@ class Simulator:
 		# Update time
 		if(time_limit==-1):
 			if self.verbose: print "==min_time=%d" %min_time
+			if self.with_real_time:
+				time.sleep(self.time_unit[0]*self.time_unit[1]*min_time)
 			self.time += min_time
 			if self.verbose: print "==global time=%d" %self.time
 			return continue_simulation
@@ -447,6 +453,7 @@ class Event:
 		self.source_data = { }
 		self.targets = []
 		self.te_type = ""
+		self.sampling_event = None
 	
 	def consume(self):
 		self.listeners = self.listeners-1 if self.listeners>0 else 0
@@ -459,11 +466,11 @@ class Event:
 	def emit(self):
 		self.state=event_on
 		self.run_async_callbacks()
-		for target in self.targets:
-			target.trigger(self)
 		if self.sim!=None :
 			self.sim.emitted_events.append(self)
 			self.emit_time = self.sim.time
+		for target in self.targets:
+			target.trigger(self)
 	
 	def run_async_callbacks(self):
 		for cb in self.async_callbacks:
@@ -481,7 +488,7 @@ class Event:
 	
 	def trigger(self,other):
 		if other in self.source_states.keys():
-			self.source_states[other]=event_on;
+			self.source_states[other]=event_on
 
 		if self.te_type=='>>':
 			done=reduce(lambda x,y:x and y, self.source_states.values())
@@ -489,9 +496,13 @@ class Event:
 				self.emit()
 				for k in self.source_states.keys():
 					self.source_states[k]=event_off
-
 		elif self.te_type=="&":
-			pass
+			done=reduce(lambda x,y:x and y, self.source_states.values())
+			done&=self.sources[0].emit_time==self.sources[1].emit_time
+			if done:
+				self.emit()
+				for k in self.source_states.keys():
+					self.source_states[k]=event_off
 		elif self.te_type=="|":
 			done=reduce(lambda x,y:x or y, self.source_states.values())
 			if done:
@@ -508,7 +519,10 @@ class Event:
 						self.emit()
 						self.counter=self.source_data[other]
 				elif type(self.source_data[other]) is TupleType:
-					pass
+					self.counter+=1
+					if self.source_data[other][0]<=self.counter<=self.source_data[other][1]:
+						self.emit()
+						self.counter=0
 			
 
 	def __rshift__(self, other):
@@ -528,6 +542,7 @@ class Event:
 		return result
 	
 	def __or__(self,other):
+		result=None
 		if isinstance(other,Event):
 			result=Event(self.name+'|'+other.name,self.sim)
 			self.targets.append(result)
@@ -542,11 +557,29 @@ class Event:
 		result.te_type="|"
 		return result
 	
+	def __and__(self,other):
+		result=None
+		if isinstance(other, Event):
+			result=Event(self.name+'&'+other.name,self.sim)
+			self.targets.append(result)
+			other.targets.append(result)
+			result.source_states[self]=event_off
+			result.source_states[other]=event_off
+			result.sources.append(self)
+			result.sources.append(other)
+		result.te_type='&'
+		return result
+	
 	def __mul__(self,other):
-		result = Event(self.name+'*'+str(other),self.sim)
-		self.targets.append(result)
-		result.source_data[self]=other
-		result.counter=other
+		result=None
+		if type(other) is TupleType or type(other) is IntType:
+			result = Event(self.name+'*'+str(other),self.sim)
+			self.targets.append(result)
+			result.source_data[self]=other
+			if type(other) is IntType:
+				result.counter=other
+			elif type(other) is TupleType:
+				result.counter=other
 		result.te_type='*'
 		return result
 	def __rmul__(self,other):
@@ -701,6 +734,24 @@ class state_variable:
 		self.expr = expr
 		self.assign_var_list = others
 
+# Locks
+class Lock():
+	def __init__(self,name,sim):
+		self.name=name
+		self.state = 0
+		self.sim = sim
+		self.unlocked_ev = Event(self.name+"_unlocked_ev",sim)
+	
+	def lock(self):
+		if self.state==1:
+			return (wait_event, self.unlocked_ev)
+		else:
+			self.state=1
+			return (sim_cmd,get_lock)			
+	
+	def unlock(self):
+		self.state=0
+		self.unlocked_ev.emit()
 
 # Ports
 
@@ -728,9 +779,6 @@ class in_method_port:
 		self.name = name
 		self.disconnected = True
 
-class method_channel:
-	pass
-
 ## Broadcast port
 class out_bcast_port:
 	def __init__(self,name):
@@ -740,47 +788,28 @@ class out_bcast_port:
 	def send(self,*kargs,**kwargs):
 		for o in self.others:
 			o.transfer(*kargs,**kwargs)
-
-## Reactive ports
-class in_reactive_port:
-	def __init__(self,name):
-		self.name = name
-		self.value = None
 	
-	def nb_assign(self,other):
+	def send_b(self):
 		pass
+
+## Fifo port
+class in_fifo_port:
+	def __init__(self,name,sim=None):
+		self.contents=[]
+		self.name=name
+		self.item_in = Event(self.name+"_item_in",sim)
+		self.item = None
+	
+	def transfer(self,payload):
+		self.contents.append(payload)
+		self.item_in.emit()
+	
+	def get(self):
+		if len(self.contents)==0:
+			yield wait_event,self.item_in
+		self.item=self.contents.pop()
 		
-
-
-	def b_assign(self,other):
-		pass
-
 	
-	def __le__(self,other):
-		pass
-
-
-
-class out_reactive_port:
-	def __init__(self,name):
-		self.name = name
-		self.value = None
-
-class reactive_channel:
-	def __init__(self,name):
-		self.name = name
-		self.in_value = None
-		self.out_value = None
-
-## FIFO ports
-class in_fifo_port(Component):
-	def __init__(self,name,parent):
-		pass
-
-class out_fifo_port(Component):
-	def __init__(self,name,parent):
-		pass
-
-class fifo_channel:
-	pass
-
+	
+		
+		
